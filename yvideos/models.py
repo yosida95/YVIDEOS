@@ -19,6 +19,11 @@ from sqlalchemy.orm import (
 )
 from zope.sqlalchemy import ZopeTransactionExtension
 
+from .exceptions import (
+    CollectionNotFound,
+    VideoNotFound
+)
+
 DBSession = scoped_session(sessionmaker(extension=ZopeTransactionExtension()))
 Base = declarative_base()
 
@@ -115,12 +120,122 @@ class Tag(Base):
     __tablename__ = u'tags'
 
     id = Column(Unicode(36), primary_key=True)
-    tag = Column(Unicode(20), nullable=False, unique=True)
+    name = Column(Unicode(20), nullable=False, unique=True)
     collections = relationship(Collection, secondary=tag_collection_assoc)
     videos = relationship(Video, secondary=tag_video_assoc)
 
-    def __init__(self, tag):
-        assert isinstance(tag, unicode)
+    def __init__(self, name):
+        assert isinstance(name, unicode)
 
         self.id = unicode(uuid.uuid4())
-        self.tag = tag
+        self.name = name
+
+
+class S3Rogics(object):
+
+    def add_bucket(self, region, name):
+        b = S3Bucket(region, name)
+        DBSession.add(b)
+
+        return b
+
+
+class VideoRogics(object):
+
+    def create(self, title):
+        v = Video(title)
+        DBSession.add(v)
+
+        return v
+
+    def add_object(self, video, s3_bucket, s3_key, size_no):
+        assert isinstance(video, Video)
+        assert isinstance(s3_bucket, S3Bucket)
+        assert isinstance(s3_key, unicode)
+        assert isinstance(size_no, int)
+
+        _object = Object(video, s3_bucket, s3_key, size_no)
+        DBSession.add(_object)
+        return True
+
+    def get_by_id(self, video_id):
+        video = DBSession.query(
+            Video
+        ).filter(
+            Video.id == video_id
+        ).first()
+
+        if video is None:
+            raise VideoNotFound
+        return video
+
+
+class CollectionRogics(object):
+
+    def create(self, title):
+        assert isinstance(title, unicode)
+
+        c = Collection(title)
+        DBSession.add(c)
+        return c
+
+    def get_by_id(self, collection_id):
+        collection = DBSession.query(
+            Collection
+        ).filter(
+            Collection.id == collection_id
+        ).first()
+
+        if collection is None:
+            raise CollectionNotFound()
+        return collection
+
+    def add_video(self, collection, video, sequence):
+        assert isinstance(collection, Collection)
+        assert isinstance(video, Video)
+        assert isinstance(sequence, int)
+        assert len(collection.videos) + 1 >= sequence > -1
+
+        if 0 < sequence <= len(collection.videos):
+            collection.videos.insert(sequence - 1, video)
+        else:
+            collection.videos.append(video)
+        return True
+
+
+class TagRogics(object):
+
+    def get_or_create(self, name):
+        assert isinstance(name, unicode)
+
+        tag = DBSession.query(
+            Tag
+        ).filter(
+            Tag.name == name
+        ).first()
+
+        if tag is None:
+            tag = Tag(name)
+            DBSession.add(tag)
+
+        return tag
+
+    def add_video(self, tag, video):
+        assert isinstance(tag, Tag)
+        assert isinstance(video, Video)
+
+        if video in tag.videos:
+            return False
+
+        tag.videos.append(video)
+        return True
+
+    def add_collection(self, tag, collection):
+        assert isinstance(tag, Tag)
+        assert isinstance(collection, Collection)
+
+        if collection in tag.collections:
+            return False
+
+        tag.collections.append(collection)
+        return True
