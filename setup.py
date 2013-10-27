@@ -18,6 +18,8 @@ requires = [
     'transaction',
     'zope.sqlalchemy',
     'waitress',
+    'boto',
+    'rsa'
 ]
 
 setup(name='yvideos',
