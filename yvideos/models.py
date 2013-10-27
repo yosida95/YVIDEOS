@@ -13,7 +13,9 @@ from sqlalchemy import (
     Unicode,
     UnicodeText
 )
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.orderinglist import ordering_list
 from sqlalchemy.orm import (
     backref,
     relationship,
@@ -142,12 +144,21 @@ class Object(Base):
         }
 
 
-collection_video_assoc = Table(
-    'collection_video_assoc', Base.metadata,
-    Column('collection_id', Unicode(36), ForeignKey('collections.id'),
-           nullable=False),
-    Column('video_id', Unicode(36), ForeignKey('videos.id'), nullable=False)
-)
+class CollectionVideoAssoc(Base):
+    __tablename__ = u'collection_video_assoc'
+
+    collection_id = Column(Unicode(36), ForeignKey('collections.id'),
+                           primary_key=True, nullable=False)
+    video_id = Column(Unicode(36), ForeignKey(Video.id),
+                      primary_key=True, nullable=False)
+    video = relationship(Video)
+    position = Column(Integer(), nullable=False)
+
+    def __init__(self, video, **kw):
+        if video is not None:
+            kw[u'video'] = video
+
+        super(CollectionVideoAssoc, self).__init__(**kw)
 
 
 class Collection(Base):
@@ -155,7 +166,10 @@ class Collection(Base):
 
     id = Column(Unicode(36), primary_key=True)
     title = Column(Unicode(36), primary_key=True)
-    videos = relationship(Video, secondary=collection_video_assoc)
+    _videos = relationship(CollectionVideoAssoc,
+                           order_by=[CollectionVideoAssoc.position],
+                           collection_class=ordering_list(u'position'))
+    videos = association_proxy(u'_videos', u'video')
 
     def __init__(self, title):
         assert isinstance(title, unicode)
@@ -167,7 +181,7 @@ class Collection(Base):
         return {
             u'id': self.id,
             u'title': self.title,
-            u'videos': self.videos
+            u'videos': list(self.videos)
         }
 
 
