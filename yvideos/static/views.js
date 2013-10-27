@@ -29,50 +29,48 @@
         render: function() {
             this.$el.empty();
 
-            if(this.video) {
-                var title = $("<h1>").text(this.video.get("title"));
-                this.$el.append(title);
+            var title = $("<h1>").text(this.video.get("title"));
+            this.$el.append(title);
 
-                this.movie = $("<div>")
-                    .attr("id", "movie");
+            this.movie = $("<div>")
+                .attr("id", "movie");
 
-                this.objects = this.video.get('objects');
-                if (this.objects.length < 1) {
-                    this.movie.text("This video is not available");
-                } else if (this.objects.length == 1 ) {
-                    this.movie.text("Loading player...");
-                } else {
-                    this.movie.text("Waiting for choose size of movie...");
+            this.objects = this.video.get('objects');
+            if (this.objects.length < 1) {
+                this.movie.text("This video is not available");
+            } else if (this.objects.length == 1 ) {
+                this.movie.text("Loading player...");
+            } else {
+                this.movie.text("Waiting for choose size of movie...");
 
-                    var dropdown = $("<div>").addClass("btn-group");
-                    this.$el.append(dropdown);
+                var dropdown = $("<div>").addClass("btn-group");
+                this.$el.append(dropdown);
 
-                    var button = $("<button>")
-                        .attr("type", "button")
-                        .attr("data-toggle", "dropdown")
-                        .addClass("btn")
-                        .addClass("btn-default")
-                        .addClass("dropdown-toggle")
-                        .text("size")
-                        .append($("<span>").addClass("caret"));
-                    dropdown.append(button);
+                var button = $("<button>")
+                    .attr("type", "button")
+                    .attr("data-toggle", "dropdown")
+                    .addClass("btn")
+                    .addClass("btn-default")
+                    .addClass("dropdown-toggle")
+                    .text("size")
+                    .append($("<span>").addClass("caret"));
+                dropdown.append(button);
 
-                    var menu = $("<ul>")
-                        .attr("role", "menu")
-                        .addClass("dropdown-menu");
-                    dropdown.append(menu);
+                var menu = $("<ul>")
+                    .attr("role", "menu")
+                    .addClass("dropdown-menu");
+                dropdown.append(menu);
 
-                    this.objects.forEach($.proxy(function(object){
-                        column = new YVIDEOS.Views.DropdownColumn({
-                            parentView: this,
-                            object: object
-                        }).render();
-                        menu.append(column.$el);
-                    }, this));
-                }
-
-                this.$el.append(this.movie);
+                this.objects.forEach($.proxy(function(object){
+                    column = new YVIDEOS.Views.DropdownColumn({
+                        parentView: this,
+                        object: object
+                    }).render();
+                    menu.append(column.$el);
+                }, this));
             }
+
+            this.$el.append(this.movie);
             return this;
         },
         renderMovie: function(object) {
@@ -90,7 +88,7 @@
         },
         afterRender: function() {
             if (this.objects.length == 1) {
-                this.renderMovie(this.objects.at(0));
+                this.renderMovie(this.objects.first());
             }
 
             return this;
