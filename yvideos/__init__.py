@@ -12,6 +12,21 @@ from .models import (
 
 def add_routes(config):
     config.add_route('home', '/')
+    config.add_route(u'api_collections', u'/api/collections')
+    config.add_route(u'api_collection',
+                     u'/api/collections/{collection_id}')
+
+    config.add_route(u'api_objects', u'/api/objects')
+    config.add_route(u'api_object', u'/api/objects/{object_id}')
+
+    config.add_route(u'api_videos', u'/api/videos')
+    config.add_route(u'api_video', u'/api/videos/{video_id}')
+
+    config.add_route(u'api_tags', u'/api/tags')
+    config.add_route(u'api_tag', u'/api/tags/{tag_id}')
+
+    config.add_route(u'api_s3_buckets', u'/api/s3/buckets')
+    config.add_route(u'api_s3_bucket', u'/api/s3/buckets/{bucket_id}')
 
 
 def main(global_config, **settings):
