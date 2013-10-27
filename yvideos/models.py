@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 
+import random
+import time
 import uuid
 
+import boto
 from sqlalchemy import (
     Column,
     ForeignKey,
     Integer,
     Table,
-    Unicode
+    Unicode,
+    UnicodeText
 )
-
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (
     backref,
@@ -20,7 +23,12 @@ from sqlalchemy.orm import (
 from zope.sqlalchemy import ZopeTransactionExtension
 
 from .exceptions import (
+    BucketNotFound,
     CollectionNotFound,
+    KeyPairNotFound,
+    ObjectNotFound,
+    SignerNotFound,
+    TagNotFound,
     VideoNotFound
 )
 
@@ -34,6 +42,8 @@ class S3Bucket(Base):
     id = Column(Unicode(36), primary_key=True)
     region = Column(Unicode(36), nullable=False)
     name = Column(Unicode(255), nullable=False)
+    distribution_id = Column(Unicode(255), nullable=False)
+    origin = Column(Unicode(255), nullable=False)
 
     def __init__(self, region, name):
         assert isinstance(region, unicode)
@@ -42,6 +52,39 @@ class S3Bucket(Base):
         self.id = unicode(uuid.uuid4())
         self.region = region
         self.name = name
+
+    def set_distribution_id(self, distribution_id):
+        assert isinstance(distribution_id, unicode)
+
+        self.distribution_id = distribution_id
+        return True
+
+    def set_origin(self, origin):
+        assert isinstance(origin, unicode)
+
+        self.origin = origin
+        return True
+
+    def __json__(self, request):
+        return {
+            u'id': self.id,
+            u'region': self.region,
+            u'name': self.name,
+        }
+
+
+class KeyPair(Base):
+    __tablename__ = u'cloudfront_keypairs'
+
+    id = Column(Unicode(20), primary_key=True)
+    private = Column(UnicodeText(), nullable=False)
+
+    def __init__(self, id, private):
+        assert isinstance(id, unicode)
+        assert isinstance(private, unicode)
+
+        self.id = id
+        self.private = private
 
 
 class Video(Base):
@@ -56,6 +99,13 @@ class Video(Base):
         self.id = unicode(uuid.uuid4())
         self.title = title
 
+    def __json__(self, request):
+        return {
+            u'id': self.id,
+            u'title': self.title,
+            u'objects': self.objects
+        }
+
 
 class Object(Base):
     __tablename__ = u'objects'
@@ -64,27 +114,39 @@ class Object(Base):
     video_id = Column(Unicode(36), ForeignKey(Video.id), nullable=False)
     video = relationship(Video, backref=backref(u'objects'))
     s3_bucket_id = Column(Unicode(36), ForeignKey(S3Bucket.id), nullable=False)
-    s3_bucket = relationship(S3Bucket, backref=backref(u'videos'))
+    s3_bucket = relationship(S3Bucket, backref=backref(u'objects'))
     s3_key = Column(Unicode(255), nullable=False, unique=True)
     size_no = Column(Integer(), nullable=False)
 
-    def __init__(self, video, s3_bucket, s3_key, size_no):
-        assert isinstance(video, Video)
+    def __init__(self, s3_bucket, s3_key, size_no):
         assert isinstance(s3_bucket, S3Bucket)
         assert isinstance(s3_key, unicode)
         assert isinstance(size_no, int)
 
         self.id = unicode(uuid.uuid4())
-        self.video = video
         self.s3_bucket = s3_bucket
         self.s3_key = s3_key
         self.size_no = size_no
 
+    def set_video(self, video):
+        assert isinstance(video, Video)
+
+        self.video = video
+        return True
+
+    def __json__(self, request):
+        return {
+            u'id': self.id,
+            u's3_bucket': self.s3_bucket,
+            u's3_key': self.s3_key
+        }
+
 
 collection_video_assoc = Table(
     'collection_video_assoc', Base.metadata,
-    Column('collection_id', Unicode(36), ForeignKey('collections.id')),
-    Column('video_id', Unicode(36), ForeignKey('videos.id'))
+    Column('collection_id', Unicode(36), ForeignKey('collections.id'),
+           nullable=False),
+    Column('video_id', Unicode(36), ForeignKey('videos.id'), nullable=False)
 )
 
 
@@ -101,18 +163,26 @@ class Collection(Base):
         self.id = unicode(uuid.uuid4())
         self.title = title
 
+    def __json__(self, request):
+        return {
+            u'id': self.id,
+            u'title': self.title,
+            u'videos': self.videos
+        }
+
 
 tag_video_assoc = Table(
     'tag_video_assoc', Base.metadata,
-    Column('tag_id', Unicode(36), ForeignKey('tags.id')),
-    Column('video_id', Unicode(36), ForeignKey('videos.id'))
+    Column('tag_id', Unicode(36), ForeignKey('tags.id'), nullable=False),
+    Column('video_id', Unicode(36), ForeignKey('videos.id'), nullable=False)
 )
 
 
 tag_collection_assoc = Table(
     'tag_collection_assoc', Base.metadata,
-    Column('tag_id', Unicode(36), ForeignKey('tags.id')),
-    Column('collection_id', Unicode(36), ForeignKey('collections.id'))
+    Column('tag_id', Unicode(36), ForeignKey('tags.id'), nullable=False),
+    Column('collection_id', Unicode(36), ForeignKey('collections.id'),
+           nullable=False)
 )
 
 
@@ -130,6 +200,14 @@ class Tag(Base):
         self.id = unicode(uuid.uuid4())
         self.name = name
 
+    def __json__(self, reqeust):
+        return {
+            u'id': self.id,
+            u'name': self.name,
+            u'collections': self.collections,
+            u'videos': self.videos
+        }
+
 
 class S3Rogics(object):
 
@@ -138,6 +216,91 @@ class S3Rogics(object):
         DBSession.add(b)
 
         return b
+
+    def get_all_buckets(self):
+        buckets = DBSession.query(
+            S3Bucket
+        ).all()
+
+        return list(buckets)
+
+    def get_bucket_by_id(self, bucket_id):
+        bucket = DBSession.query(
+            S3Bucket
+        ).filter(
+            S3Bucket.id == bucket_id
+        ).first()
+
+        if bucket is None:
+            raise BucketNotFound()
+        return bucket
+
+    def generate_url(self, _object):
+        assert isinstance(_object, Object)
+
+        bucket = _object.s3_bucket
+        resource = u'%s%s' % (
+            bucket.origin,
+            _object.s3_key
+        )
+
+        conn = boto.connect_cloudfront()
+        dist = conn.get_distribution_info(bucket.distribution_id)
+        signers = filter(lambda signer: signer.id == u'Self',
+                         dist.active_signers)
+        if len(signers) < 1:
+            raise SignerNotFound()
+
+        key_pair = random.choice(filter(
+            lambda key_pair: key_pair is not None,
+            [
+                self._get_key_pair_by_id(key_pair_id, False)
+                for key_pair_id in signers[0].key_pair_ids
+            ]
+        ))
+        signed_url = dist.create_signed_url(
+            resource,
+            key_pair.id,
+            expire_time=int(time.time() + 60 * 60 * 6),  # 6hours
+            private_key_string=key_pair.private
+        )
+        return signed_url
+
+    def _get_key_pair_by_id(self, key_pair_id, raise_exception=True):
+        key_pair = DBSession.query(
+            KeyPair
+        ).filter(
+            KeyPair.id == key_pair_id
+        ).first()
+
+        if key_pair is None and raise_exception:
+            raise KeyPairNotFound()
+
+        return key_pair
+
+
+class ObjectRogics(object):
+
+    def get_all(self):
+
+        objects = DBSession.query(
+            Object
+        ).all()
+
+        return list(objects)
+
+    def get_by_id(self, object_id):
+        assert isinstance(object_id, unicode)
+
+        _object = DBSession.query(
+            Object
+        ).filter(
+            Object.id == object_id
+        ).first()
+
+        if _object is None:
+            raise ObjectNotFound()
+        return _object
 
 
 class VideoRogics(object):
@@ -148,15 +311,19 @@ class VideoRogics(object):
 
         return v
 
-    def add_object(self, video, s3_bucket, s3_key, size_no):
+    def add_object(self, video, _object):
         assert isinstance(video, Video)
-        assert isinstance(s3_bucket, S3Bucket)
-        assert isinstance(s3_key, unicode)
-        assert isinstance(size_no, int)
+        assert isinstance(_object, Object)
 
-        _object = Object(video, s3_bucket, s3_key, size_no)
-        DBSession.add(_object)
+        _object.set_video(video)
         return True
+
+    def get_all(self):
+        videos = DBSession.query(
+            Video
+        ).all()
+
+        return list(videos)
 
     def get_by_id(self, video_id):
         video = DBSession.query(
@@ -179,6 +346,13 @@ class CollectionRogics(object):
         DBSession.add(c)
         return c
 
+    def get_all(self):
+        collections = DBSession.query(
+            Collection
+        ).all()
+
+        return list(collections)
+
     def get_by_id(self, collection_id):
         collection = DBSession.query(
             Collection
@@ -196,6 +370,9 @@ class CollectionRogics(object):
         assert isinstance(sequence, int)
         assert len(collection.videos) + 1 >= sequence > -1
 
+        if video in collection.videos:
+            return False
+
         if 0 < sequence <= len(collection.videos):
             collection.videos.insert(sequence - 1, video)
         else:
@@ -205,20 +382,33 @@ class CollectionRogics(object):
 
 class TagRogics(object):
 
-    def get_or_create(self, name):
+    def create(self, name):
         assert isinstance(name, unicode)
+
+        tag = Tag(name)
+        DBSession.add(tag)
+
+        return tag
+
+    def get_by_id(self, tag_id):
+        assert isinstance(tag_id, unicode)
 
         tag = DBSession.query(
             Tag
         ).filter(
-            Tag.name == name
+            Tag.id == tag_id
         ).first()
 
         if tag is None:
-            tag = Tag(name)
-            DBSession.add(tag)
-
+            raise TagNotFound()
         return tag
+
+    def get_all(self):
+        tags = DBSession.query(
+            Tag
+        ).all()
+
+        return list(tags)
 
     def add_video(self, tag, video):
         assert isinstance(tag, Tag)
