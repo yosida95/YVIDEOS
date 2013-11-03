@@ -18,7 +18,12 @@
 
     YVIDEOS.Collections.Video = Backbone.Collection.extend({
         model: YVIDEOS.Models.Video,
-        url: '/api/videos'
+        url: '/api/videos',
+        search: function(text) {
+            return this.models.filter(function(video) {
+                return video.get('title').toLowerCase().indexOf(text.toLowerCase()) > -1;
+            })
+        }
     });
 
     YVIDEOS.Collections.Tag = Backbone.Collection.extend({

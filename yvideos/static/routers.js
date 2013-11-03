@@ -21,9 +21,22 @@
         },
         routes: {
             "videos/:video_id": "watch_video",
-            "collections/:collection_id/:video_id": "watch_video"
+            "collections/:collection_id/:video_id": "watch_video",
+            "object/register": "object_register"
+        },
+        object_register: function() {
+            this.currentView && this.currentView.remove();
+
+            this.ready.done($.proxy(function(){
+                this.currentView = (new YVIDEOS.Views.ObjectRegisterView({
+                    objects: this.objects.slice(0, 10)
+                })).render()
+                $("#content").html(this.currentView.el);
+            }, this));
         },
         watch_video: function() {
+            this.currentView && this.currentView.remove();
+
             var collection_id,
                 video_id;
 
@@ -44,7 +57,6 @@
                         return;
                     }
 
-                    console.log(collection);
                     video = collection.get('videos').detect(function(video){
                         return video.get('id') == video_id;
                     });
@@ -54,7 +66,6 @@
 
                 if (video === undefined) {
                     // NotFound
-                    console.log('here');
                     return;
                 }
 
@@ -62,7 +73,14 @@
                     video: video
                 });
                 $("#content").html(this.currentView.render().el);
-                this.currentView.afterRender();
+
+                if(collection) {
+                    this.currentSideView = new YVIDEOS.Views.CollectionSideView({
+                        watchView: this.currentView,
+                        collection: collection
+                    });
+                    $("#sidebar").html(this.currentSideView.render().el);
+                }
             }, this));
         }
     });

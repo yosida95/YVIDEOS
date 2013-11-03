@@ -181,7 +181,7 @@ def api_videos(request):
 
 
 @view_config(route_name=u'api_video',
-             request_method=[u'GET'],
+             request_method=[u'GET', u'PUT'],
              renderer=u'json')
 def api_video(request):
     vr = VideoRogics()
@@ -193,6 +193,27 @@ def api_video(request):
 
     if request.method == u'GET':
         return video
+    elif request.method == u'PUT':
+        try:
+            body = request.json_body
+        except:
+            request.response.status_int = 400
+            return {}
+        else:
+            _or = ObjectRogics()
+            try:
+                if body[u'id'] != video.id:
+                    request.response.status_int = 400
+                    return {}
+
+                video.title = body[u'title']
+                for idx, _object in enumerate(body[u'objects']):
+                    vr.add_object(video, _or.get_by_id(_object[u'id']))
+            except (AssertionError, KeyError):
+                request.response.status_int = 400
+                return {}
+            else:
+                return video
 
 
 @view_config(route_name=u'api_tags',

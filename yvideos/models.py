@@ -118,17 +118,17 @@ class Object(Base):
     s3_bucket_id = Column(Unicode(36), ForeignKey(S3Bucket.id), nullable=False)
     s3_bucket = relationship(S3Bucket, backref=backref(u'objects'))
     s3_key = Column(Unicode(255), nullable=False, unique=True)
-    size_no = Column(Integer(), nullable=False)
+    version = Column(Unicode(255), nullable=False)
 
-    def __init__(self, s3_bucket, s3_key, size_no):
+    def __init__(self, s3_bucket, s3_key, version):
         assert isinstance(s3_bucket, S3Bucket)
         assert isinstance(s3_key, unicode)
-        assert isinstance(size_no, int)
+        assert isinstance(version, unicode)
 
         self.id = unicode(uuid.uuid4())
         self.s3_bucket = s3_bucket
         self.s3_key = s3_key
-        self.size_no = size_no
+        self.version = version
 
     def set_video(self, video):
         assert isinstance(video, Video)
@@ -140,7 +140,8 @@ class Object(Base):
         return {
             u'id': self.id,
             u's3_bucket': self.s3_bucket,
-            u's3_key': self.s3_key
+            u's3_key': self.s3_key,
+            u'version': self.version
         }
 
 
