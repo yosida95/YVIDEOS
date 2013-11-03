@@ -13,7 +13,6 @@
             <script src="${ request.static_path('yvideos:static/collections.js') }"></script>
             <script src="${ request.static_path('yvideos:static/views.js') }"></script>
             <script src="${ request.static_path('yvideos:static/main.js') }"></script>
-            <meta name="copyright" content="(C) 2013 yosida95">
             <meta name="Author" content="yosida95">
             <meta name="robots" content="ALL">
             <title>YVIDEOS</title>
@@ -46,9 +45,5 @@
                     </div>
                 </div>
             </div>
-
-            <script id="watchVideo" type="text/template">
-
-            </script>
         </body>
 </html>
