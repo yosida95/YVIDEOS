@@ -1,5 +1,6 @@
 (function() {
-    window.YVIDEOS = window.YVIDEOS || {Routers: {}, Collections: {}, Models: {}, Views: {}};
+    window.YVIDEOS = window.YVIDEOS ||
+        {Routers: {}, Collections: {}, Models: {}, Views: {}};
 
     YVIDEOS.Routers.MainRouter = Backbone.Router.extend({
         initialize: function(options) {
@@ -20,18 +21,44 @@
                 }, this));
         },
         routes: {
-            "videos/:video_id": "watch_video",
-            "collections/:collection_id/:video_id": "watch_video",
-            "object/register": "object_register"
+            'series': 'series',
+            'collections/:collection_id/:video_id': 'watch_video',
+            'videos': 'videos',
+            'videos/:video_id': 'watch_video',
+            'object/register': 'object_register'
+        },
+        series: function() {
+            this.currentView && this.currentView.remove();
+            this.currentSideView && this.currentSideView.remove();
+
+            this.ready.done($.proxy(function() {
+                this.currentView = (new YVIDEOS.Views.SeriesView({
+                    series: this.collections
+                })).render();
+                $('#content').html(this.currentView.el);
+            }, this));
+
+        },
+        videos: function() {
+            this.currentView && this.currentView.remove();
+            this.currentSideView && this.currentSideView.remove();
+
+            this.ready.done($.proxy(function() {
+                this.currentView = (new YVIDEOS.Views.VideosView({
+                    videos: this.videos
+                })).render();
+                $('#content').html(this.currentView.el);
+            }, this));
+
         },
         object_register: function() {
             this.currentView && this.currentView.remove();
 
-            this.ready.done($.proxy(function(){
+            this.ready.done($.proxy(function() {
                 this.currentView = (new YVIDEOS.Views.ObjectRegisterView({
                     objects: this.objects.slice(0, 10)
-                })).render()
-                $("#content").html(this.currentView.el);
+                })).render();
+                $('#content').html(this.currentView.el);
             }, this));
         },
         watch_video: function() {
@@ -47,17 +74,17 @@
                 video_id = arguments[1];
             }
 
-            this.ready.done($.proxy(function(){
+            this.ready.done($.proxy(function() {
                 var collection,
                     video;
                 if (collection_id) {
                     collection = this.collections.get(collection_id);
-                    if(collection === undefined){
+                    if (collection === undefined) {
                         // NotFound
                         return;
                     }
 
-                    video = collection.get('videos').detect(function(video){
+                    video = collection.get('videos').detect(function(video) {
                         return video.get('id') == video_id;
                     });
                 } else {
@@ -72,14 +99,15 @@
                 this.currentView = new YVIDEOS.Views.WatchVideo({
                     video: video
                 });
-                $("#content").html(this.currentView.render().el);
+                $('#content').html(this.currentView.render().el);
 
-                if(collection) {
-                    this.currentSideView = new YVIDEOS.Views.CollectionSideView({
-                        watchView: this.currentView,
-                        collection: collection
-                    });
-                    $("#sidebar").html(this.currentSideView.render().el);
+                if (collection) {
+                    this.currentSideView =
+                        new YVIDEOS.Views.CollectionSideView({
+                            watchView: this.currentView,
+                            collection: collection
+                        });
+                    $('#sidebar').html(this.currentSideView.render().el);
                 }
             }, this));
         }

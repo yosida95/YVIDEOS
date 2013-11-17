@@ -11,5 +11,5 @@ $(function() {
         collections: collections
     });
 
-    Backbone.history.start()
+    Backbone.history.start();
 });

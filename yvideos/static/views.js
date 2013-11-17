@@ -1,8 +1,9 @@
 (function() {
-    window.YVIDEOS = window.YVIDEOS || {Routers: {}, Collections: {}, Models: {}, Views: {}};
+    window.YVIDEOS = window.YVIDEOS ||
+        {Routers: {}, Collections: {}, Models: {}, Views: {}};
 
     YVIDEOS.Views.DropdownColumn = Backbone.View.extend({
-        tagName: "li",
+        tagName: 'li',
         initialize: function(options) {
             this.parentView = options.parentView;
             this.object = options.object;
@@ -15,11 +16,158 @@
         },
         render: function() {
             this.$el.empty();
-            var link = $("<a>")
-                .text(this.object.get("version"));
+            var link = $('<a>')
+                .text(this.object.get('version'));
             this.$el.append(link);
             return this;
         }
+    });
+
+    YVIDEOS.Views.PaginationView = Backbone.View.extend({
+        initialize: function(options) {
+            this.items = options.items;
+
+            this.page = 1;
+            this.items_per_row = 3;
+            this.items_per_page = this.items_per_row * 4;
+
+        },
+        events: {
+            'click .prev': 'prev_page',
+            'click .next': 'next_page'
+        },
+        prev_page: function() {
+            this.page -= 1;
+            this.render();
+        },
+        next_page: function() {
+            this.page += 1;
+            this.render();
+        },
+        render: function() {
+            this.$el.empty();
+
+            var begin = (this.page - 1) * this.items_per_page;
+            var items = this.items.slice(begin, begin + this.items_per_page);
+
+            for (var i = 0; i < items.length; i += this.items_per_row) {
+                var row = (new this.Row()).render();
+                this.$el.append(row.$el);
+
+                for (var j = i; j < Math.min(i + this.items_per_row, items.length); j++) {
+                    var cell = new this.Cell({item: items[j]});
+                    cell.render();
+                    row.$el.append(cell.$el);
+                }
+            }
+
+            var row = $('<div>')
+                .addClass('row')
+                .append($('<div>')
+                    .addClass('col-md-12')
+                    .append($('<ul>')
+                        .addClass('pagination')
+                        .append($('<li>')
+                            .append($('<a>')
+                                .addClass('prev')
+                                .html('&laquo;')))
+                        .append($('<li>')
+                            .append($('<a>')
+                                .addClass('next')
+                                .html('&raquo;')))));
+            this.$el.append(row);
+
+            return this;
+        },
+        Row: Backbone.View.extend({
+            tagName: 'div',
+            className: 'row',
+            render: function() {
+                return this;
+            }
+        }),
+        Cell: function() {
+            throw 'NotImplemented';
+        }
+    });
+
+    YVIDEOS.Views.SeriesView = Backbone.View.extend({
+        initialize: function(options) {
+            this.series = options.series;
+        },
+        render: function() {
+            this.$el.empty();
+
+            this.$el.append($('<h1>').text('シリーズ一覧'));
+            var pagination = (new this.pagination({
+                items: this.series
+            })).render();
+            this.$el.append(pagination.$el);
+
+            return this;
+        },
+        pagination: YVIDEOS.Views.PaginationView.extend({
+            Cell: Backbone.View.extend({
+                tagName: 'div',
+                className: 'col-md-4 series-cell',
+                events: {
+                    'click': 'click'
+                },
+                initialize: function(options) {
+                    this.series = options.item;
+                },
+                render: function() {
+                    this.$el.append($('<h3>').text(this.series.get('title')));
+                    return this;
+                },
+                click: function() {
+                    app.navigate(this.link({
+                        series_id: this.series.get('id'),
+                        video_id: this.series.get('videos').first().get('id')
+                    }), {trigger: true});
+                },
+                link: _.template('collections/<%= series_id %>/<%= video_id %>')
+            })
+        })
+    });
+
+    YVIDEOS.Views.VideosView = Backbone.View.extend({
+        initialize: function(options) {
+            this.videos = options.videos;
+        },
+        render: function() {
+            this.$el.empty();
+
+            this.$el.append($('<h1>').text('ビデオ一覧'));
+            var pagination = (new this.pagination({
+                items: this.videos
+            })).render();
+            this.$el.append(pagination.$el);
+
+            return this;
+        },
+        pagination: YVIDEOS.Views.PaginationView.extend({
+            Cell: Backbone.View.extend({
+                tagName: 'div',
+                className: 'col-md-4 videos-cell',
+                events: {
+                    'click': 'click'
+                },
+                initialize: function(options) {
+                    this.video = options.item;
+                },
+                render: function() {
+                    this.$el.append($('<h3>').text(this.video.get('title')));
+                    return this;
+                },
+                click: function() {
+                    app.navigate(this.link({
+                        video_id: this.video.get('id')
+                    }), {trigger: true});
+                },
+                link: _.template('videos/<%= video_id %>')
+            })
+        })
     });
 
     YVIDEOS.Views.WatchVideo = Backbone.View.extend({
@@ -29,40 +177,40 @@
         render: function() {
             this.$el.empty();
 
-            var title = $("<h1>").text(this.video.get("title"));
+            var title = $('<h1>').text(this.video.get('title'));
             this.$el.append(title);
 
-            this.movie = $("<div>")
-                .attr("id", "movie");
+            this.movie = $('<div>')
+                .attr('id', 'movie');
 
             this.objects = this.video.get('objects');
             if (this.objects.length < 1) {
-                this.movie.text("This video is not available");
-            } else if (this.objects.length == 1 ) {
-                this.movie.text("Loading player...");
+                this.movie.text('This video is not available');
+            } else if (this.objects.length == 1) {
+                this.movie.text('Loading player...');
                 this.renderMovie(this.objects.first());
             } else {
-                this.movie.text("Waiting for choose size of movie...");
+                this.movie.text('Waiting for choose size of movie...');
 
-                var dropdown = $("<div>").addClass("btn-group");
+                var dropdown = $('<div>').addClass('btn-group');
                 this.$el.append(dropdown);
 
-                var button = $("<button>")
-                    .attr("type", "button")
-                    .attr("data-toggle", "dropdown")
-                    .addClass("btn")
-                    .addClass("btn-default")
-                    .addClass("dropdown-toggle")
-                    .text("size")
-                    .append($("<span>").addClass("caret"));
+                var button = $('<button>')
+                    .attr('type', 'button')
+                    .attr('data-toggle', 'dropdown')
+                    .addClass('btn')
+                    .addClass('btn-default')
+                    .addClass('dropdown-toggle')
+                    .text('size')
+                    .append($('<span>').addClass('caret'));
                 dropdown.append(button);
 
-                var menu = $("<ul>")
-                    .attr("role", "menu")
-                    .addClass("dropdown-menu");
+                var menu = $('<ul>')
+                    .attr('role', 'menu')
+                    .addClass('dropdown-menu');
                 dropdown.append(menu);
 
-                this.objects.forEach($.proxy(function(object){
+                this.objects.forEach($.proxy(function(object) {
                     column = new YVIDEOS.Views.DropdownColumn({
                         parentView: this,
                         object: object
@@ -75,8 +223,8 @@
             return this;
         },
         renderMovie: function(object) {
-            this.movie.empty().text("Loading player...");
-            object.fetch().done($.proxy(function(){
+            this.movie.empty().text('Loading player...');
+            object.fetch().done($.proxy(function() {
                 var unit = Math.floor(this.movie.width() / 16);
                 jwplayer(this.movie[0]).setup({
                     file: object.get('url'),
@@ -127,9 +275,12 @@
             return this;
         },
         click: function() {
-            console.log('clicked');
-            app.navigate("collections/" + this.collection.get('id') + "/" + this.video.get("id"), {trigger: true});
-        }
+            app.navigate(this.url({
+                'collection_id': this.collection.get('id'),
+                'video_id': this.video.get('id')
+            }), {trigger: true});
+        },
+        url: _.template('collections/<%= collection_id %>/<%= video_id %>')
     });
 
     YVIDEOS.Views.ObjectRegisterView = Backbone.View.extend({
@@ -142,7 +293,7 @@
             this.objects.forEach($.proxy(function(object) {
                 this.$el.append((new YVIDEOS.Views.ObjectRegisterRowView({
                     object: object
-                })).render().$el)
+                })).render().$el);
             }), this);
 
             return this;
@@ -151,8 +302,8 @@
 
 
     YVIDEOS.Views.ObjectRegisterRowView = Backbone.View.extend({
-        tagName: "div",
-        className: "row",
+        tagName: 'div',
+        className: 'row',
         initialize: function(options) {
             this.object = options.object;
         },
@@ -163,8 +314,6 @@
                 register = (new YVIDEOS.Views.VideoRegisterFormView({
                     object: this.object
                 })).render();
-
-            console.log(preview);
 
             this.$el
                 .append($('<div>')
@@ -187,25 +336,25 @@
             this.object = options.object;
             this._id = (function() {;
                 var id = [];
-                for(var i = 0; i < 20; i++) {
+                for (var i = 0; i < 20; i++) {
                     var seed = Math.floor(Math.random() * 32);
-                    if(seed < 26) {
+                    if (seed < 26) {
                         id.push(String.fromCharCode(65 + seed));
-                    }else{
+                    } else {
                         id.push(String.fromCharCode(71 + seed));
                     }
                 }
-                return id.join("");
+                return id.join('');
             })();
         },
         render: function() {
             this.$el.empty();
             this.movie = $('<div>')
                 .attr('id', this._id)
-                .text("Loading player...");
+                .text('Loading player...');
             this.$el.append(this.movie);
 
-            this.object.fetch().done($.proxy(function(){
+            this.object.fetch().done($.proxy(function() {
                 var unit = Math.floor(this.movie.width() / 16);
                 jwplayer(this._id).setup({
                     file: this.object.get('url'),
@@ -222,7 +371,7 @@
         tagName: 'form',
         attributes: {
             className: 'form-horizontal',
-            role: "form"
+            role: 'form'
         },
         events: {
             'submit': 'submit',
@@ -275,11 +424,11 @@
         },
         register: function() {
             var video = new YVIDEOS.Models.Video({
-                title: this.$el.find('input[type="text"]').val()
+                title: this.$el.find('input[type=\'text\']').val()
             });
             video.save({}, {success: function(model, response) {
                 model.set('id', response.id);
-            }}).done($.proxy(function(){
+            }}).done($.proxy(function() {
                 app.videos.add(video);
 
                 video.get('objects').push(this.object);
@@ -289,8 +438,8 @@
             return false;
         },
         search: function() {
-            var videos = app.videos.search(this.$el.find('input[type="text"]').val());
-            console.log(videos);
+            var videos =
+                app.videos.search(this.$el.find('input[type=\'text\']').val());
             return false;
         }
     });

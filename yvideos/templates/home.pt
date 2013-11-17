@@ -3,6 +3,7 @@
       <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css">
+            <link rel="stylesheet" href="${ request.static_path('yvideos:static/style.css') }">
             <script src="http://code.jquery.com/jquery-2.0.3.min.js"></script>
             <script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/js/bootstrap.min.js"></script>
             <script src="http://underscorejs.org/underscore-min.js"></script>
@@ -33,6 +34,10 @@
                     </button>
                     <a class="navbar-brand" href="${ request.route_path('home') }">YVIDEOS</a>
                 </div>
+                <ul class="nav navbar-nav">
+                    <li><a href="javascript:app.navigate('series', {trigger: true})">シリーズ一覧</a></li>
+                    <li><a href="javascript:app.navigate('videos', {trigger: true})">ビデオ一覧</a></li>
+                </ul>
             </nav>
 
             <div class="container">

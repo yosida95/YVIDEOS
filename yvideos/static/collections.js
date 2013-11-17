@@ -1,5 +1,6 @@
 (function() {
-    window.YVIDEOS = window.YVIDEOS || {Routers: {}, Collections: {}, Models: {}, Views: {}};
+    window.YVIDEOS = window.YVIDEOS ||
+        {Routers: {}, Collections: {}, Models: {}, Views: {}};
 
     YVIDEOS.Collections.S3Bucket = Backbone.Collection.extend({
         model: YVIDEOS.Models.S3Bucket,
@@ -21,8 +22,9 @@
         url: '/api/videos',
         search: function(text) {
             return this.models.filter(function(video) {
-                return video.get('title').toLowerCase().indexOf(text.toLowerCase()) > -1;
-            })
+                return video.get('title').toLowerCase().
+                    indexOf(text.toLowerCase()) > -1;
+            });
         }
     });
 
