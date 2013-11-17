@@ -6,13 +6,13 @@
         urlRoot: '/api/s3/buckets'
     });
 
-    YVIDEOS.Models.Collection = Backbone.Model.extend({
-        urlRoot: '/api/collections',
-        parse: function(collection) {
-            collection.videos = new YVIDEOS.Collections.Video(
-                collection.videos, {parse: true}
+    YVIDEOS.Models.Series = Backbone.Model.extend({
+        urlRoot: '/api/series',
+        parse: function(series) {
+            series.videos = new YVIDEOS.Collections.Video(
+                series.videos, {parse: true}
             );
-            return collection;
+            return series;
         }
     });
 

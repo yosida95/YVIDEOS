@@ -126,7 +126,7 @@
                         video_id: this.series.get('videos').first().get('id')
                     }), {trigger: true});
                 },
-                link: _.template('collections/<%= series_id %>/<%= video_id %>')
+                link: _.template('series/<%= series_id %>/<%= video_id %>')
             })
         })
     });
@@ -237,18 +237,18 @@
         }
     });
 
-    YVIDEOS.Views.CollectionSideView = Backbone.View.extend({
+    YVIDEOS.Views.SeriesSideView = Backbone.View.extend({
         initialize: function(options) {
             this.watchView = options.watchView;
-            this.collection = options.collection;
+            this.series = options.series;
         },
         render: function() {
-            this.$el.append($('<h2>').text(this.collection.get('title')));
+            this.$el.append($('<h2>').text(this.series.get('title')));
 
-            this.collection.get('videos').forEach($.proxy(function(video) {
-                var row = new YVIDEOS.Views.CollectionSideViewRow({
+            this.series.get('videos').forEach($.proxy(function(video) {
+                var row = new YVIDEOS.Views.SeriesSideViewRow({
                     watchView: this.watchView,
-                    collection: this.collection,
+                    series: this.series,
                     video: video
                 }).render();
                 this.$el.append(row.$el);
@@ -257,11 +257,11 @@
         }
     });
 
-    YVIDEOS.Views.CollectionSideViewRow = Backbone.View.extend({
+    YVIDEOS.Views.SeriesSideViewRow = Backbone.View.extend({
         tagName: 'div',
         initialize: function(options) {
             this.watchView = options.watchView;
-            this.collection = options.collection;
+            this.series = options.series;
             this.video = options.video;
         },
         events: {
@@ -276,11 +276,11 @@
         },
         click: function() {
             app.navigate(this.url({
-                'collection_id': this.collection.get('id'),
+                'series_id': this.series.get('id'),
                 'video_id': this.video.get('id')
             }), {trigger: true});
         },
-        url: _.template('collections/<%= collection_id %>/<%= video_id %>')
+        url: _.template('series/<%= series_id %>/<%= video_id %>')
     });
 
     YVIDEOS.Views.ObjectRegisterView = Backbone.View.extend({

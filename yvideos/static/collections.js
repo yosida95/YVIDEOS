@@ -12,9 +12,9 @@
         url: '/api/objects'
     });
 
-    YVIDEOS.Collections.Collection = Backbone.Collection.extend({
-        model: YVIDEOS.Models.Collection,
-        url: '/api/collections'
+    YVIDEOS.Collections.Series = Backbone.Collection.extend({
+        model: YVIDEOS.Models.Series,
+        url: '/api/series'
     });
 
     YVIDEOS.Collections.Video = Backbone.Collection.extend({

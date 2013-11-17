@@ -7,7 +7,7 @@
             this.s3buckets = options.s3buckets;
             this.objects = options.objects;
             this.videos = options.videos;
-            this.collections = options.collections;
+            this.series = options.series;
 
             this.ready = this.s3buckets.fetch()
                 .then($.proxy(function() {
@@ -17,12 +17,12 @@
                     return this.videos.fetch();
                 }, this))
                 .then($.proxy(function() {
-                    return this.collections.fetch();
+                    return this.series.fetch();
                 }, this));
         },
         routes: {
             'series': 'series',
-            'collections/:collection_id/:video_id': 'watch_video',
+            'series/:series_id/:video_id': 'watch_video',
             'videos': 'videos',
             'videos/:video_id': 'watch_video',
             'object/register': 'object_register'
@@ -33,7 +33,7 @@
 
             this.ready.done($.proxy(function() {
                 this.currentView = (new YVIDEOS.Views.SeriesView({
-                    series: this.collections
+                    series: this.series
                 })).render();
                 $('#content').html(this.currentView.el);
             }, this));
@@ -64,27 +64,27 @@
         watch_video: function() {
             this.currentView && this.currentView.remove();
 
-            var collection_id,
+            var series_id,
                 video_id;
 
             if (arguments.length == 1) {
                 video_id = arguments[0];
             } else {
-                collection_id = arguments[0];
+                series_id = arguments[0];
                 video_id = arguments[1];
             }
 
             this.ready.done($.proxy(function() {
-                var collection,
+                var series,
                     video;
-                if (collection_id) {
-                    collection = this.collections.get(collection_id);
-                    if (collection === undefined) {
+                if (series_id) {
+                    series = this.series.get(series_id);
+                    if (series === undefined) {
                         // NotFound
                         return;
                     }
 
-                    video = collection.get('videos').detect(function(video) {
+                    video = series.get('videos').detect(function(video) {
                         return video.get('id') == video_id;
                     });
                 } else {
@@ -101,11 +101,11 @@
                 });
                 $('#content').html(this.currentView.render().el);
 
-                if (collection) {
+                if (series) {
                     this.currentSideView =
-                        new YVIDEOS.Views.CollectionSideView({
+                        new YVIDEOS.Views.SeriesSideView({
                             watchView: this.currentView,
-                            collection: collection
+                            series: series
                         });
                     $('#sidebar').html(this.currentSideView.render().el);
                 }

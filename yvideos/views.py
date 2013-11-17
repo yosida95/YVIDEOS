@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 
-from pyramid.view import view_config
+from pyramid.view import (
+    view_config,
+    view_defaults
+)
 
 from .exceptions import (
     BucketNotFound,
-    CollectionNotFound,
+    SeriesNotFound,
     ObjectNotFound,
     TagNotFound,
     VideoNotFound
 )
 from .models import (
-    CollectionRogics,
+    SeriesRogics,
     S3Rogics,
     ObjectRogics,
     TagRogics,
@@ -63,63 +66,142 @@ def api_s3_bucket(request):
         return bucket
 
 
-@view_config(route_name=u'api_collections',
-             request_method=[u'GET', u'POST'],
-             renderer=u'json')
-def api_collections(request):
-    cr = CollectionRogics()
-    if request.method == u'GET':
-        return cr.get_all()
-    elif request.method == u'POST':
+@view_defaults(route_name='api_series_list', renderer='json')
+class Collections(object):
+
+    def __init__(self, request):
+        self.request = request
+        self.sr = SeriesRogics()
+
+    @view_config(request_method='GET')
+    def get(self):
+        return self.sr.get_all()
+
+    @view_config(request_method='POST')
+    def post(self):
         try:
-            body = request.json_body
+            body = self.request.json_body
         except:
-            request.response.status_int = 400
+            self.request.response.status_int = 400
             return {}
         else:
             try:
-                collection = cr.create(body[u'title'])
+                series = self.sr.create(body[u'title'])
             except KeyError:
-                request.response.status_int = 400
+                self.request.response.status_int = 400
                 return {}
             else:
-                return collection
+                return series
 
 
-@view_config(route_name=u'api_collection',
-             request_method=[u'GET', u'PUT'],
-             renderer=u'json')
-def api_collection(request):
-    collection_id = request.matchdict[u'collection_id']
-    if request.method == u'GET':
-        cr = CollectionRogics()
+@view_defaults(route_name='api_series', renderer='json')
+class Series(object):
+
+    def __init__(self, request):
+        self.request = request
+
+        self.sr = SeriesRogics()
+        self.vr = VideoRogics()
+
         try:
-            collection = cr.get_by_id(collection_id)
-        except CollectionNotFound:
-            request.response.status_int = 404
+            self.series = self.sr.get_by_id(request.matchdict['series_id'])
+        except SeriesNotFound:
+            self.series = None
+
+    @view_config(request_method='GET')
+    def get(self):
+        if self.series is None:
+            self.request.response.status_int = 404
             return {}
-        else:
-            return collection
-    elif request.method == u'PUT':
+
+        return self.series
+
+    @view_config(request_method='PUT')
+    def put(self):
+        if self.series is None:
+            self.request.response.status_int = 404
+            return {}
+
         try:
-            body = request.json_body
+            body = self.request.json_body
         except:
-            request.response.status_int = 400
+            self.request.response.status_int = 400
             return {}
         else:
-            cr = CollectionRogics()
-            vr = VideoRogics()
             try:
-                collection = cr.get_by_id(collection_id)
-                video = vr.get_by_id(body[u'video'])
-
-                print type(body[u'seq_no'])
-                cr.add_video(collection, video, body[u'seq_no'])
+                self.series.set_title(body['title'])
+                self.series.set_videos([
+                    self.vr.get_by_id(video['id']) for video in body['videos']
+                ])
             except (VideoNotFound, KeyError, AssertionError):
-                request.response.status_int = 400
+                self.request.response.status_int = 400
                 return {}
             else:
-                return collection
+                return self.series
+
+
+@view_defaults(route_name=u'api_videos', renderer=u'json')
+class Videos(object):
+
+    def __init__(self, request):
+        self.request = request
+        self.vr = VideoRogics()
+
+    @view_config(request_method='GET')
+    def get(self):
+        return self.vr.get_all()
+
+    @view_config(request_method='POST')
+    def post(self):
+        try:
+            body = self.request.json_body
+            video = self.vr.create(body[u'title'])
+        except:
+            self.request.response.status_int = 400
+            print u'here'
+            print u'here'
+            return {}
+        else:
+            return video
+
+
+@view_defaults(route_name='api_video', renderer='json')
+class Video(object):
+
+    def __init__(self, request):
+        self.request = request
+
+        self.vr = VideoRogics()
+        self.or_ = ObjectRogics()
+        try:
+            self.video = self.vr.get_by_id(request.matchdict['video_id'])
+        except VideoNotFound:
+            self.video = None
+
+    def get(self):
+        if self.video is None:
+            self.request.response.status_int = 404
+            return {}
+
+        return self.video
+
+    def put(self):
+        if self.video is None:
+            self.request.response.status_int = 404
+            return {}
+
+        try:
+            body = self.request.json_body
+            self.video.set_title(body[u'title'])
+            self.video.set_objects([
+                self.or_.get_by_id(object_['id'])
+                for object_ in body['objects']
+            ])
+        except:
+            self.request.response.status_int = 400
+            return {}
+        else:
+            return self.video
 
 
 @view_config(route_name=u'api_objects',
@@ -151,71 +233,7 @@ def api_object(request):
         return _dict
 
 
-@view_config(route_name=u'api_videos',
-             request_method=[u'GET', u'POST'],
-             renderer=u'json')
-def api_videos(request):
-    vr = VideoRogics()
-
-    if request.method == u'GET':
-        return vr.get_all()
-    elif request.method == u'POST':
-        try:
-            body = request.json_body
-        except:
-            request.response.status_int = 400
-            print u'here'
-            print u'here'
-            return {}
-        else:
-            try:
-                video = vr.create(body[u'title'])
-            except (KeyError, AssertionError) as why:
-                request.response.status_int = 400
-                print why
-                print body
-                print why
-                return {}
-            else:
-                return video
-
-
-@view_config(route_name=u'api_video',
-             request_method=[u'GET', u'PUT'],
-             renderer=u'json')
-def api_video(request):
-    vr = VideoRogics()
-    try:
-        video = vr.get_by_id(request.matchdict[u'video_id'])
-    except (AssertionError, VideoNotFound):
-        request.response.status_int = 404
-        return {}
-
-    if request.method == u'GET':
-        return video
-    elif request.method == u'PUT':
-        try:
-            body = request.json_body
-        except:
-            request.response.status_int = 400
-            return {}
-        else:
-            _or = ObjectRogics()
-            try:
-                if body[u'id'] != video.id:
-                    request.response.status_int = 400
-                    return {}
-
-                video.title = body[u'title']
-                for idx, _object in enumerate(body[u'objects']):
-                    vr.add_object(video, _or.get_by_id(_object[u'id']))
-            except (AssertionError, KeyError):
-                request.response.status_int = 400
-                return {}
-            else:
-                return video
-
-
+"""
 @view_config(route_name=u'api_tags',
              request_method=[u'GET', u'POST'],
              renderer=u'json')
@@ -269,17 +287,18 @@ def api_tag(request):
                     return {}
                 else:
                     tr.add_video(tag, video)
-            elif u'collection' in body:
-                cr = CollectionRogics()
+            elif u'series' in body:
+                cr = SeriesRogics()
                 try:
-                    collection = cr.get_by_id(body[u'collection'])
-                except (AssertionError, CollectionNotFound):
+                    series = cr.get_by_id(body[u'series'])
+                except (AssertionError, SeriesNotFound):
                     request.response.status_int = 400
                     return {}
                 else:
-                    tr.add_collection(tag, collection)
+                    tr.add_series(tag, series)
             else:
                 request.response.status_int = 400
                 return {}
 
             return tag
+"""

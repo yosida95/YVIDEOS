@@ -13,7 +13,6 @@ from sqlalchemy import (
     Unicode,
     UnicodeText
 )
-from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.orderinglist import ordering_list
 from sqlalchemy.orm import (
@@ -26,7 +25,7 @@ from zope.sqlalchemy import ZopeTransactionExtension
 
 from .exceptions import (
     BucketNotFound,
-    CollectionNotFound,
+    SeriesNotFound,
     KeyPairNotFound,
     ObjectNotFound,
     SignerNotFound,
@@ -89,11 +88,14 @@ class KeyPair(Base):
         self.private = private
 
 
-class Video(Base):
-    __tablename__ = u'videos'
+class Series(Base):
+    __tablename__ = u'series'
 
     id = Column(Unicode(36), primary_key=True)
-    title = Column(Unicode(255), nullable=False)
+    title = Column(Unicode(36), primary_key=True)
+
+    videos = relationship('Video', order_by='Video.position',
+                          collection_class=ordering_list('position'))
 
     def __init__(self, title):
         assert isinstance(title, unicode)
@@ -101,11 +103,61 @@ class Video(Base):
         self.id = unicode(uuid.uuid4())
         self.title = title
 
+    def set_title(self, title):
+        assert isinstance(title, unicode)
+        self.title = title
+
+    def set_videos(self, videos):
+        assert isinstance(videos, list)
+
+        self.videos = self.videos[0:0]
+        for video in videos:
+            assert isinstance(video, Video)
+            self.videos.append(video)
+
+    def add_video(self, video, position):
+        assert isinstance(video, Video)
+        assert isinstance(position, int) and position >= 0
+
+        if position == 0 or len(self.videos) > position:
+            self.videos.append(video)
+        else:
+            self.videos.insert(position - 1, video)
+
     def __json__(self, request):
         return {
             u'id': self.id,
             u'title': self.title,
-            u'objects': self.objects
+            u'videos': list(self.videos)
+        }
+
+
+class Video(Base):
+    __tablename__ = u'videos'
+
+    id = Column(Unicode(36), primary_key=True)
+    title = Column(Unicode(255), nullable=False)
+    series_id = Column(Unicode(36), ForeignKey(Series.id), nullable=False)
+    position = Column(Integer(), nullable=False)
+    objects = relationship('Object', backref=backref(u'video'), uselist=True)
+
+    def __init__(self, title):
+        assert isinstance(title, unicode)
+
+        self.id = unicode(uuid.uuid4())
+        self.title = title
+
+        self.series_id = ''
+        self.position = 0
+
+    def add_object(self, object_):
+        self.objects.append(object_)
+
+    def __json__(self, request):
+        return {
+            u'id': self.id,
+            u'title': self.title,
+            u'objects': list(self.objects)
         }
 
 
@@ -114,11 +166,11 @@ class Object(Base):
 
     id = Column(Unicode(36), primary_key=True)
     video_id = Column(Unicode(36), ForeignKey(Video.id), nullable=False)
-    video = relationship(Video, backref=backref(u'objects'))
     s3_bucket_id = Column(Unicode(36), ForeignKey(S3Bucket.id), nullable=False)
-    s3_bucket = relationship(S3Bucket, backref=backref(u'objects'))
     s3_key = Column(Unicode(255), nullable=False, unique=True)
     version = Column(Unicode(255), nullable=False)
+
+    s3_bucket = relationship(S3Bucket, backref=backref(u'objects'))
 
     def __init__(self, s3_bucket, s3_key, version):
         assert isinstance(s3_bucket, S3Bucket)
@@ -126,15 +178,12 @@ class Object(Base):
         assert isinstance(version, unicode)
 
         self.id = unicode(uuid.uuid4())
-        self.s3_bucket = s3_bucket
+        self.video_id = u''
+        self.s3_bucket_id = s3_bucket.id
         self.s3_key = s3_key
         self.version = version
 
-    def set_video(self, video):
-        assert isinstance(video, Video)
-
-        self.video = video
-        return True
+        self.s3_bucket = s3_bucket
 
     def __json__(self, request):
         return {
@@ -145,47 +194,6 @@ class Object(Base):
         }
 
 
-class CollectionVideoAssoc(Base):
-    __tablename__ = u'collection_video_assoc'
-
-    collection_id = Column(Unicode(36), ForeignKey('collections.id'),
-                           primary_key=True, nullable=False)
-    video_id = Column(Unicode(36), ForeignKey(Video.id),
-                      primary_key=True, nullable=False)
-    video = relationship(Video)
-    position = Column(Integer(), nullable=False)
-
-    def __init__(self, video, **kw):
-        if video is not None:
-            kw[u'video'] = video
-
-        super(CollectionVideoAssoc, self).__init__(**kw)
-
-
-class Collection(Base):
-    __tablename__ = u'collections'
-
-    id = Column(Unicode(36), primary_key=True)
-    title = Column(Unicode(36), primary_key=True)
-    _videos = relationship(CollectionVideoAssoc,
-                           order_by=[CollectionVideoAssoc.position],
-                           collection_class=ordering_list(u'position'))
-    videos = association_proxy(u'_videos', u'video')
-
-    def __init__(self, title):
-        assert isinstance(title, unicode)
-
-        self.id = unicode(uuid.uuid4())
-        self.title = title
-
-    def __json__(self, request):
-        return {
-            u'id': self.id,
-            u'title': self.title,
-            u'videos': list(self.videos)
-        }
-
-
 tag_video_assoc = Table(
     'tag_video_assoc', Base.metadata,
     Column('tag_id', Unicode(36), ForeignKey('tags.id'), nullable=False),
@@ -193,11 +201,10 @@ tag_video_assoc = Table(
 )
 
 
-tag_collection_assoc = Table(
-    'tag_collection_assoc', Base.metadata,
+tag_series_assoc = Table(
+    'tag_series_assoc', Base.metadata,
     Column('tag_id', Unicode(36), ForeignKey('tags.id'), nullable=False),
-    Column('collection_id', Unicode(36), ForeignKey('collections.id'),
-           nullable=False)
+    Column('series_id', Unicode(36), ForeignKey('series.id'), nullable=False)
 )
 
 
@@ -206,7 +213,8 @@ class Tag(Base):
 
     id = Column(Unicode(36), primary_key=True)
     name = Column(Unicode(20), nullable=False, unique=True)
-    collections = relationship(Collection, secondary=tag_collection_assoc)
+
+    seriess = relationship(Series, secondary=tag_series_assoc)
     videos = relationship(Video, secondary=tag_video_assoc)
 
     def __init__(self, name):
@@ -219,7 +227,7 @@ class Tag(Base):
         return {
             u'id': self.id,
             u'name': self.name,
-            u'collections': self.collections,
+            u'series': self.series,
             u'videos': self.videos
         }
 
@@ -336,6 +344,8 @@ class VideoRogics(object):
     def get_all(self):
         videos = DBSession.query(
             Video
+        ).order_by(
+            Video.title
         ).all()
 
         return list(videos)
@@ -352,46 +362,48 @@ class VideoRogics(object):
         return video
 
 
-class CollectionRogics(object):
+class SeriesRogics(object):
 
     def create(self, title):
         assert isinstance(title, unicode)
 
-        c = Collection(title)
+        c = Series(title)
         DBSession.add(c)
         return c
 
     def get_all(self):
-        collections = DBSession.query(
-            Collection
+        series = DBSession.query(
+            Series
+        ).order_by(
+            Series.title
         ).all()
 
-        return list(collections)
+        return list(series)
 
-    def get_by_id(self, collection_id):
-        collection = DBSession.query(
-            Collection
+    def get_by_id(self, series_id):
+        series = DBSession.query(
+            Series
         ).filter(
-            Collection.id == collection_id
+            Series.id == series_id
         ).first()
 
-        if collection is None:
-            raise CollectionNotFound()
-        return collection
+        if series is None:
+            raise SeriesNotFound()
+        return series
 
-    def add_video(self, collection, video, sequence):
-        assert isinstance(collection, Collection)
+    def add_video(self, series, video, sequence):
+        assert isinstance(series, Series)
         assert isinstance(video, Video)
         assert isinstance(sequence, int)
-        assert len(collection.videos) + 1 >= sequence > -1
+        assert len(series.videos) + 1 >= sequence > -1
 
-        if video in collection.videos:
+        if video in series.videos:
             return False
 
-        if 0 < sequence <= len(collection.videos):
-            collection.videos.insert(sequence - 1, video)
+        if 0 < sequence <= len(series.videos):
+            series.videos.insert(sequence - 1, video)
         else:
-            collection.videos.append(video)
+            series.videos.append(video)
         return True
 
 
@@ -435,12 +447,12 @@ class TagRogics(object):
         tag.videos.append(video)
         return True
 
-    def add_collection(self, tag, collection):
+    def add_series(self, tag, series):
         assert isinstance(tag, Tag)
-        assert isinstance(collection, Collection)
+        assert isinstance(series, Series)
 
-        if collection in tag.collections:
+        if series in tag.seriess:
             return False
 
-        tag.collections.append(collection)
+        tag.seriess.append(series)
         return True

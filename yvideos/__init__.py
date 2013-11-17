@@ -12,9 +12,9 @@ from .models import (
 
 def add_routes(config):
     config.add_route('home', '/')
-    config.add_route(u'api_collections', u'/api/collections')
-    config.add_route(u'api_collection',
-                     u'/api/collections/{collection_id}')
+    config.add_route(u'api_series_list', u'/api/series')
+    config.add_route(u'api_series',
+                     u'/api/series/{series_id}')
 
     config.add_route(u'api_objects', u'/api/objects')
     config.add_route(u'api_object', u'/api/objects/{object_id}')

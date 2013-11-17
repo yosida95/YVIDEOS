@@ -5,7 +5,7 @@ class BucketNotFound(Exception):
     pass
 
 
-class CollectionNotFound(Exception):
+class SeriesNotFound(Exception):
     pass
 
 
@@ -19,6 +19,7 @@ class ObjectNotFound(Exception):
 
 class SignerNotFound(Exception):
     pass
+
 
 class VideoNotFound(Exception):
     pass
